@@ -468,6 +468,10 @@ textarea.form-control{resize:vertical;min-height:80px;}
         <div class="form-group"><label class="form-label">Email <span class="required">*</span></label><input class="form-control" id="user-email" type="email" placeholder="jane@grp-usa.com"></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-control" id="user-phone" placeholder="(555) 555-5555"></div>
+        <div class="form-group"><label class="form-label">Title</label><input class="form-control" id="user-title" placeholder="Sales Representative"></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label class="form-label">Role</label><select class="form-control" id="user-role"><option value="rep">Sales Rep</option><option value="admin">Admin</option></select></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-control" id="user-active"><option value="true">Active</option><option value="false">Inactive</option></select></div>
       </div>
@@ -524,7 +528,7 @@ textarea.form-control{resize:vertical;min-height:80px;}
             <th style="min-width:180px">Description</th>
             <th style="width:60px">UOM</th>
             <th style="width:100px">Part #</th>
-            <th style="width:60px">Qty</th>
+            <th style="width:80px">Qty</th>
             <th style="width:100px" class="internal-header">Unit Cost ($)</th>
             <th style="width:120px" class="internal-header">Supplier</th>
             <th style="width:100px">Unit Sell ($)</th>
@@ -1035,7 +1039,7 @@ function renderLineItems() {
     <td><input class="li-input" id="li-${i}-description" value="${esc(li.description||'')}" onchange="updLI(${i},'description',this.value)" placeholder="Description..."></td>
     <td><input class="li-input" id="li-${i}-uom" value="${esc(li.uom||'')}" onchange="updLI(${i},'uom',this.value)" placeholder="EA"></td>
     <td><input class="li-input" id="li-${i}-part_number" value="${esc(li.part_number||'')}" onchange="updLI(${i},'part_number',this.value)" placeholder="PN-001"></td>
-    <td><input class="li-input" id="li-${i}-quantity" type="number" value="${li.quantity||1}" onchange="updLI(${i},'quantity',+this.value)" min="1" style="text-align:center"></td>
+    <td><input class="li-input" id="li-${i}-quantity" type="number" value="${li.quantity||1}" onchange="updLI(${i},'quantity',+this.value)" min="1" style="text-align:center;width:100%;min-width:60px"></td>
     <td class="internal-col"><input class="li-input" id="li-${i}-unit_cost" type="number" value="${li.unit_cost||''}" onchange="updLI(${i},'unit_cost',+this.value)" placeholder="0.00" step="0.01"></td>
     <td class="internal-col"><input class="li-input" id="li-${i}-supplier" value="${esc(li.supplier||'')}" onchange="updLI(${i},'supplier',this.value)" placeholder="Supplier"></td>
     <td><input class="li-input" id="li-${i}-unit_sell" type="number" value="${li.unit_sell||''}" onchange="updLI(${i},'unit_sell',+this.value)" placeholder="0.00" step="0.01"></td>
@@ -1448,8 +1452,8 @@ function switchAdminTab(tab) {
 function openUserModal(editId=null) {
   document.getElementById('user-modal-title').textContent = editId?'Edit User':'Add User';
   document.getElementById('user-id').value = editId||'';
-  if(editId){ const u=STATE.data.users.find(x=>x.id===editId); if(u){ document.getElementById('user-name').value=u.full_name||''; document.getElementById('user-email').value=u.email||''; document.getElementById('user-role').value=u.role||'rep'; document.getElementById('user-active').value=u.active?'true':'false'; } }
-  else { ['user-name','user-email'].forEach(id=>document.getElementById(id).value=''); document.getElementById('user-role').value='rep'; document.getElementById('user-active').value='true'; }
+  if(editId){ const u=STATE.data.users.find(x=>x.id===editId); if(u){ document.getElementById('user-name').value=u.full_name||''; document.getElementById('user-email').value=u.email||''; document.getElementById('user-phone').value=u.phone||''; document.getElementById('user-title').value=u.title||''; document.getElementById('user-role').value=u.role||'rep'; document.getElementById('user-active').value=u.active?'true':'false'; } }
+  else { ['user-name','user-email','user-phone','user-title'].forEach(id=>document.getElementById(id).value=''); document.getElementById('user-role').value='rep'; document.getElementById('user-active').value='true'; }
   openModal('modal-user');
 }
 
@@ -1457,7 +1461,7 @@ async function saveUser() {
   const name=document.getElementById('user-name').value.trim(), email=document.getElementById('user-email').value.trim().toLowerCase();
   if(!name||!email){ showToast('Name and email required','error'); return; }
   const editId=document.getElementById('user-id').value;
-  const data={full_name:name,email,role:document.getElementById('user-role').value,active:document.getElementById('user-active').value==='true'};
+  const data={full_name:name,email,phone:document.getElementById('user-phone').value.trim(),title:document.getElementById('user-title').value.trim(),role:document.getElementById('user-role').value,active:document.getElementById('user-active').value==='true'};
   if(editId){ const u=STATE.data.users.find(x=>x.id===editId); if(u) Object.assign(u,data); }
   else STATE.data.users.push({id:uid(),...data,created_at:new Date().toISOString()});
   await save('users'); closeModal('modal-user');
@@ -1470,56 +1474,83 @@ async function saveUser() {
 // ═══════════════════════════════════════
 function exportPDF(id) {
   const q = STATE.data.quotes.find(x=>x.id===id); if(!q) return;
+  const rep = STATE.data.users.find(u=>u.id===q.owner_id)||{};
+  const repBlock = `
+    <div style="margin-top:6px;font-size:12px;color:#555;line-height:1.7">
+      <strong style="color:#1e1e1e">${rep.full_name||q.owner_name||''}</strong><br>
+      ${rep.title?rep.title+'<br>':''}
+      ${rep.phone?rep.phone+'<br>':''}
+      ${rep.email?rep.email:''}
+    </div>`;
+  const LOGO = 'data:image/png;base64,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';
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Barlow',sans-serif;font-size:13px;color:#1e1e1e;padding:40px;}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #d41819;}
-    .brand-name{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;letter-spacing:2px;text-transform:uppercase;}
-    .brand-sub{font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;}
-    .quote-num{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:#d41819;text-align:right;}
-    .quote-date{font-size:12px;color:#888;text-align:right;margin-top:4px;}
-    .exp{font-size:12px;color:#d41819;font-weight:600;text-align:right;margin-top:4px;}
-    .section-title{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888;border-bottom:1px solid #e8e8e8;padding-bottom:6px;margin-bottom:12px;margin-top:24px;}
-    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-    .info-item label{font-size:11px;font-weight:600;color:#888;text-transform:uppercase;display:block;margin-bottom:2px;}
+    body{font-family:Arial,sans-serif;font-size:13px;color:#1e1e1e;padding:40px;}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:3px solid #d41819;}
+    .logo-area img{max-height:60px;max-width:220px;}
+    .company-info{font-size:11px;color:#555;margin-top:6px;line-height:1.6;}
+    .quote-meta{text-align:right;}
+    .quote-num{font-size:22px;font-weight:700;color:#d41819;}
+    .quote-date{font-size:12px;color:#888;margin-top:4px;}
+    .exp{font-size:12px;color:#d41819;font-weight:600;margin-top:4px;}
+    .body-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;}
+    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888;border-bottom:1px solid #e8e8e8;padding-bottom:5px;margin-bottom:10px;}
+    .info-item{margin-bottom:6px;}
+    .info-item label{font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;display:block;}
+    .info-item span{font-size:13px;color:#1e1e1e;}
     table{width:100%;border-collapse:collapse;}
-    thead th{background:#1e1e1e;color:white;padding:8px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;}
+    thead th{background:#1e1e1e;color:white;padding:8px 10px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;}
     thead th.r{text-align:right;}
-    tbody tr:nth-child(even){background:#f4f4f4;}
-    tbody td{padding:9px 12px;border-bottom:1px solid #e8e8e8;}
+    tbody tr:nth-child(even){background:#f7f7f7;}
+    tbody td{padding:8px 10px;border-bottom:1px solid #ebebeb;font-size:13px;}
     tbody td.r{text-align:right;}
-    .total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;}
-    .total-row.grand{border-top:2px solid #1e1e1e;margin-top:6px;padding-top:8px;font-size:16px;font-weight:700;}
-    .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e8e8e8;font-size:11px;color:#888;display:flex;justify-content:space-between;}
+    .totals-box{display:flex;justify-content:flex-end;margin-top:12px;}
+    .totals-inner{min-width:200px;}
+    .total-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-top:2px solid #1e1e1e;margin-top:4px;padding-top:8px;font-size:15px;font-weight:700;}
+    .footer{margin-top:36px;padding-top:14px;border-top:1px solid #e8e8e8;font-size:11px;color:#aaa;display:flex;justify-content:space-between;}
+    .rep-box{background:#f7f7f7;border-left:3px solid #d41819;padding:10px 14px;margin-top:16px;font-size:12px;}
+    .rep-box strong{font-size:13px;color:#1e1e1e;}
   </style></head><body>
   <div class="header">
-    <div><div class="brand-name">General Rubber &amp; Plastics</div><div class="brand-sub">CRM &amp; Quoting — Nexus</div></div>
-    <div>
+    <div class="logo-area">
+      <img src="${LOGO}" alt="General Rubber &amp; Plastics">
+      <div class="company-info">generalrubberplastics.com</div>
+    </div>
+    <div class="quote-meta">
       <div class="quote-num">${q.quote_number}${q.revision>0?' Rev '+q.revision:''}</div>
       <div class="quote-date">Date: ${fmtD(q.created_at)}</div>
       ${q.expiration_date?`<div class="exp">Expires: ${fmtD(q.expiration_date)}</div>`:''}
     </div>
   </div>
-  <div class="section-title">Quote Details</div>
-  <div class="info-grid">
-    <div class="info-item"><label>Company</label><span>${q.company_name||'—'}</span></div>
-    <div class="info-item"><label>Contact</label><span>${q.contact_name||'—'}</span></div>
-    <div class="info-item"><label>Prepared By</label><span>${q.owner_name||'—'}</span></div>
-    <div class="info-item"><label>Status</label><span>${q.status}</span></div>
+
+  <div class="body-grid">
+    <div>
+      <div class="section-title">Quoted To</div>
+      <div class="info-item"><label>Company</label><span><strong>${q.company_name||'—'}</strong></span></div>
+      <div class="info-item"><label>Contact</label><span>${q.contact_name||'—'}</span></div>
+    </div>
+    <div>
+      <div class="section-title">Your Sales Representative</div>
+      ${repBlock}
+    </div>
   </div>
+
   <div class="section-title">Line Items</div>
   <table>
     <thead><tr><th>#</th><th>Description</th><th>UOM</th><th>Part Number</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Extended</th><th>Lead Time</th></tr></thead>
-    <tbody>${(q.line_items||[]).map((li,i)=>`<tr><td>${i+1}</td><td>${li.description||''}</td><td>${li.uom||'—'}</td><td style="font-family:monospace;font-size:12px">${li.part_number||'—'}</td><td class="r">${li.quantity||1}</td><td class="r">$${(li.unit_sell||0).toFixed(2)}</td><td class="r"><strong>$${(li.ext_sell||0).toFixed(2)}</strong></td><td>${li.lead_time||'—'}</td></tr>`).join('')}</tbody>
+    <tbody>${(q.line_items||[]).map((li,i)=>`<tr><td>${i+1}</td><td>${li.description||''}</td><td>${li.uom||'—'}</td><td style="font-family:monospace;font-size:11px">${li.part_number||'—'}</td><td class="r">${li.quantity||1}</td><td class="r">$${(li.unit_sell||0).toFixed(2)}</td><td class="r"><strong>$${(li.ext_sell||0).toFixed(2)}</strong></td><td>${li.lead_time||'—'}</td></tr>`).join('')}</tbody>
   </table>
-  <div style="display:flex;justify-content:flex-end;margin-top:16px">
-    <div style="min-width:220px">
-      <div class="total-row grand"><span>Total</span><span>$${(q.total_sell||0).toFixed(2)}</span></div>
+  <div class="totals-box">
+    <div class="totals-inner">
+      <div class="total-row"><span>Total</span><span>$${(q.total_sell||0).toFixed(2)}</span></div>
     </div>
   </div>
-  <div class="footer"><span>General Rubber &amp; Plastics · generalrubberplastics.com</span><span>Generated by Nexus · ${new Date().toLocaleDateString()}</span></div>
+
+  <div class="footer">
+    <span>General Rubber &amp; Plastics · All prices subject to change without notice</span>
+    <span>Quote ${q.quote_number} · ${new Date().toLocaleDateString()}</span>
+  </div>
   </body></html>`;
   const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>w.print(),500);
 }
