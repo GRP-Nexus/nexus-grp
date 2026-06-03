@@ -593,22 +593,67 @@ let msalInstance = null;
 
 async function initMSAL() {
   await loadScript('https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/3.14.0/msal-browser.min.js');
-  msalInstance = new msal.PublicClientApplication({
-    auth: { clientId: CONFIG.clientId, authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`, redirectUri: window.location.href.split('?')[0].split('#')[0] },
-    cache: { cacheLocation: 'sessionStorage' }
-  });
-  await msalInstance.initialize();
+  // Small delay to ensure MSAL library is fully ready
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  const msalConfig = {
+    auth: {
+      clientId: CONFIG.clientId,
+      authority: 'https://login.microsoftonline.com/' + CONFIG.tenantId,
+      redirectUri: window.location.origin + window.location.pathname,
+      navigateToLoginRequestUrl: true
+    },
+    cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: true },
+    system: {
+      allowNativeBroker: false,
+      loggerOptions: {
+        logLevel: msal.LogLevel.Error,
+        loggerCallback: (level, message) => { if (level === msal.LogLevel.Error) console.error(message); }
+      }
+    }
+  };
+
+  try {
+    msalInstance = new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+  } catch(e) {
+    console.error('MSAL init error:', e);
+    showLogin();
+    return;
+  }
+
+  // Handle redirect response first
   try {
     const r = await msalInstance.handleRedirectPromise();
-    if (r) { STATE.accessToken = r.accessToken; STATE.user = r.account; await bootApp(); return; }
-  } catch(e) { console.error(e); }
+    if (r && r.accessToken) {
+      STATE.accessToken = r.accessToken;
+      STATE.user = r.account;
+      await bootApp();
+      return;
+    }
+  } catch(e) {
+    console.error('Redirect handling error:', e);
+  }
+
+  // Check for existing session
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     try {
-      const r = await msalInstance.acquireTokenSilent({ scopes: CONFIG.scopes, account: accounts[0] });
-      STATE.accessToken = r.accessToken; STATE.user = accounts[0]; await bootApp();
-    } catch(e) { showLogin(); }
-  } else { showLogin(); }
+      const r = await msalInstance.acquireTokenSilent({
+        scopes: CONFIG.scopes,
+        account: accounts[0],
+        forceRefresh: false
+      });
+      STATE.accessToken = r.accessToken;
+      STATE.user = accounts[0];
+      await bootApp();
+      return;
+    } catch(e) {
+      // Silent token acquisition failed, need interactive login
+      console.log('Silent auth failed, showing login');
+    }
+  }
+  showLogin();
 }
 
 function loadScript(src) {
@@ -619,8 +664,25 @@ function loadScript(src) {
 }
 
 async function signIn() {
-  try { await msalInstance.loginRedirect({ scopes: CONFIG.scopes }); }
-  catch(e) { showToast('Sign in failed: ' + e.message, 'error'); }
+  try {
+    await msalInstance.loginRedirect({
+      scopes: CONFIG.scopes,
+      prompt: 'select_account'
+    });
+  } catch(e) {
+    console.error('Login error:', e);
+    // Try popup as fallback
+    try {
+      const r = await msalInstance.loginPopup({ scopes: CONFIG.scopes });
+      if (r && r.accessToken) {
+        STATE.accessToken = r.accessToken;
+        STATE.user = r.account;
+        await bootApp();
+      }
+    } catch(e2) {
+      showToast('Sign in failed: ' + e2.message, 'error');
+    }
+  }
 }
 function signOut() { msalInstance.logoutRedirect(); }
 function showLogin() { document.getElementById('login-screen').style.display='flex'; document.getElementById('app').style.display='none'; }
