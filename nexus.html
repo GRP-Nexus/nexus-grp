@@ -947,16 +947,17 @@ function renderDashboard() {
   const lost = myQ.filter(q => q.status === 'Lost');
   const winRate = (won.length+lost.length) > 0 ? Math.round(won.length/(won.length+lost.length)*100) : 0;
 
-  // Admin toggle for own vs all quotes
-  const toggleHtml = isAdmin ? `
-    <div style="margin-bottom:16px;display:flex;align-items:center;gap:10px">
+  // Admin toggle - remove existing first, then insert once
+  const oldToggle = document.getElementById('dash-toggle');
+  if (oldToggle) oldToggle.remove();
+  if (isAdmin) {
+    const toggleHtml = `<div id="dash-toggle" style="margin-bottom:16px;display:flex;align-items:center;gap:10px">
       <span style="font-size:13px;font-weight:600;color:var(--text2)">Viewing:</span>
       <button class="btn btn-sm ${STATE.adminViewAll?'btn-primary':'btn-outline'}" onclick="STATE.adminViewAll=true;renderDashboard()">All Reps</button>
       <button class="btn btn-sm ${!STATE.adminViewAll?'btn-primary':'btn-outline'}" onclick="STATE.adminViewAll=false;renderDashboard()">My Quotes Only</button>
-    </div>` : '';
-  const oldToggle = document.getElementById('dash-toggle');
-  if (oldToggle) oldToggle.remove();
-  if (isAdmin) document.getElementById('dash-stats').insertAdjacentHTML('beforebegin', toggleHtml);
+    </div>`;
+    document.getElementById('dash-stats').insertAdjacentHTML('beforebegin', toggleHtml);
+  }
 
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-card"><div class="stat-label">Open Pipeline</div><div class="stat-value">${open.length}</div><div class="stat-sub">${fmt$(open.reduce((s,q)=>s+(q.total_sell||0),0))} in open quotes</div></div>
