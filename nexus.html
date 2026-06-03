@@ -159,10 +159,11 @@ textarea.form-control{resize:vertical;min-height:80px;}
       <div class="login-logo-text">Nexus</div>
     </div>
     <div class="login-subtitle">General Rubber &amp; Plastics</div>
-    <button class="btn-ms-login" onclick="signIn()">
+    <button class="btn-ms-login" id="signin-btn" onclick="signIn()" style="opacity:0.6">
       <svg width="18" height="18" viewBox="0 0 21 21" fill="none"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
-      Sign in with Microsoft
+      <span id="signin-btn-text">Sign in with Microsoft</span>
     </button>
+    <div id="signin-status" style="font-size:12px;color:var(--gray3);margin-top:8px;min-height:18px">Initializing...</div>
   </div>
   <div class="login-tagline">NEXUS &nbsp;·&nbsp; GRP INTERNAL PLATFORM</div>
 </div>
@@ -618,8 +619,15 @@ async function initMSAL() {
     msalInstance = new msal.PublicClientApplication(msalConfig);
     await msalInstance.initialize();
     msalReady = true;
+    // Update UI to show ready state
+    const statusEl = document.getElementById('signin-status');
+    const btnEl = document.getElementById('signin-btn');
+    if (statusEl) statusEl.textContent = 'Ready — click above to sign in';
+    if (btnEl) btnEl.style.opacity = '1';
   } catch(e) {
     console.error('MSAL init error:', e);
+    const statusEl = document.getElementById('signin-status');
+    if (statusEl) statusEl.textContent = 'Error loading auth — please refresh';
     showLogin();
     return;
   }
@@ -666,14 +674,14 @@ function loadScript(src) {
 }
 
 async function signIn() {
-  // Wait up to 5 seconds for MSAL to be ready
+  // Wait up to 15 seconds for MSAL to be ready
   let waited = 0;
-  while (!msalReady && waited < 5000) {
-    await new Promise(r => setTimeout(r, 100));
-    waited += 100;
+  while (!msalReady && waited < 15000) {
+    await new Promise(r => setTimeout(r, 200));
+    waited += 200;
   }
   if (!msalReady || !msalInstance) {
-    showToast('Authentication not ready yet. Please wait a moment and try again.', 'error');
+    showToast('Authentication timed out. Please refresh the page and try again.', 'error');
     return;
   }
   try {
