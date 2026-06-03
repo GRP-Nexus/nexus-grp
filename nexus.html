@@ -521,8 +521,9 @@ textarea.form-control{resize:vertical;min-height:80px;}
         <table class="line-items-table" id="line-items-table">
           <thead><tr>
             <th style="width:30px">#</th>
-            <th style="min-width:200px">Description</th>
-            <th style="width:110px">Part #</th>
+            <th style="min-width:180px">Description</th>
+            <th style="width:60px">UOM</th>
+            <th style="width:100px">Part #</th>
             <th style="width:60px">Qty</th>
             <th style="width:100px" class="internal-header">Unit Cost ($)</th>
             <th style="width:120px" class="internal-header">Supplier</th>
@@ -956,8 +957,8 @@ function viewQuote(id) {
     ${q.internal_notes?`<div style="background:var(--warning-bg);border:1px solid #e6cc80;border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:13px"><strong style="color:var(--warning)">Internal Notes:</strong> ${q.internal_notes}</div>`:''}
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;margin-bottom:12px">Line Items</div>
     <div style="overflow-x:auto;margin-bottom:16px">
-      <table><thead><tr><th>#</th><th>Description</th><th>Part #</th><th class="text-right">Qty</th><th class="text-right">Unit Sell</th><th class="text-right">Extended</th><th>Lead Time</th></tr></thead>
-      <tbody>${(q.line_items||[]).map((li,i)=>`<tr><td class="td-muted">${i+1}</td><td>${li.description||''}</td><td class="font-mono td-muted">${li.part_number||'—'}</td><td class="text-right">${li.quantity||1}</td><td class="text-right">${fmt$(li.unit_sell)}</td><td class="text-right fw-600">${fmt$(li.ext_sell)}</td><td class="td-muted">${li.lead_time||'—'}</td></tr>`).join('')}</tbody>
+      <table><thead><tr><th>#</th><th>Description</th><th>UOM</th><th>Part #</th><th class="text-right">Qty</th><th class="text-right">Unit Sell</th><th class="text-right">Extended</th><th>Lead Time</th></tr></thead>
+      <tbody>${(q.line_items||[]).map((li,i)=>`<tr><td class="td-muted">${i+1}</td><td>${li.description||''}</td><td class="td-muted">${li.uom||'—'}</td><td class="font-mono td-muted">${li.part_number||'—'}</td><td class="text-right">${li.quantity||1}</td><td class="text-right">${fmt$(li.unit_sell)}</td><td class="text-right fw-600">${fmt$(li.ext_sell)}</td><td class="td-muted">${li.lead_time||'—'}</td></tr>`).join('')}</tbody>
       </table>
     </div>
     <div class="flex justify-between items-center">
@@ -1029,32 +1030,55 @@ function loadContactsForQuote() {
 
 function renderLineItems() {
   const items = STATE.editLineItems||[];
-  document.getElementById('line-items-tbody').innerHTML = items.map((li,i)=>`<tr>
+  document.getElementById('line-items-tbody').innerHTML = items.map((li,i)=>`<tr id="li-row-${i}">
     <td style="text-align:center;color:var(--text3);font-size:12px">${i+1}</td>
-    <td><input class="li-input" value="${esc(li.description||'')}" oninput="updLI(${i},'description',this.value)" placeholder="Description..."></td>
-    <td><input class="li-input" value="${esc(li.part_number||'')}" oninput="updLI(${i},'part_number',this.value)" placeholder="PN-001"></td>
-    <td><input class="li-input" type="number" value="${li.quantity||1}" oninput="updLI(${i},'quantity',+this.value)" min="1" style="text-align:center"></td>
-    <td class="internal-col"><input class="li-input" type="number" value="${li.unit_cost||''}" oninput="updLI(${i},'unit_cost',+this.value)" placeholder="0.00" step="0.01"></td>
-    <td class="internal-col"><input class="li-input" value="${esc(li.supplier||'')}" oninput="updLI(${i},'supplier',this.value)" placeholder="Supplier"></td>
-    <td><input class="li-input" type="number" value="${li.unit_sell||''}" oninput="updLI(${i},'unit_sell',+this.value)" placeholder="0.00" step="0.01"></td>
-    <td style="text-align:right;padding-right:8px;font-weight:600">${fmt$(li.ext_sell||0)}</td>
-    <td class="internal-col" style="text-align:center;font-weight:600;color:${(li.margin_pct||0)>=20?'var(--success)':'var(--danger)'}">${li.margin_pct?li.margin_pct.toFixed(1)+'%':'—'}</td>
-    <td><input class="li-input" value="${esc(li.lead_time||'')}" oninput="updLI(${i},'lead_time',this.value)" placeholder="2-3 weeks"></td>
-    <td class="internal-col"><input class="li-input" value="${esc(li.internal_notes||'')}" oninput="updLI(${i},'internal_notes',this.value)" placeholder="Internal..."></td>
+    <td><input class="li-input" id="li-${i}-description" value="${esc(li.description||'')}" onchange="updLI(${i},'description',this.value)" placeholder="Description..."></td>
+    <td><input class="li-input" id="li-${i}-uom" value="${esc(li.uom||'')}" onchange="updLI(${i},'uom',this.value)" placeholder="EA"></td>
+    <td><input class="li-input" id="li-${i}-part_number" value="${esc(li.part_number||'')}" onchange="updLI(${i},'part_number',this.value)" placeholder="PN-001"></td>
+    <td><input class="li-input" id="li-${i}-quantity" type="number" value="${li.quantity||1}" onchange="updLI(${i},'quantity',+this.value)" min="1" style="text-align:center"></td>
+    <td class="internal-col"><input class="li-input" id="li-${i}-unit_cost" type="number" value="${li.unit_cost||''}" onchange="updLI(${i},'unit_cost',+this.value)" placeholder="0.00" step="0.01"></td>
+    <td class="internal-col"><input class="li-input" id="li-${i}-supplier" value="${esc(li.supplier||'')}" onchange="updLI(${i},'supplier',this.value)" placeholder="Supplier"></td>
+    <td><input class="li-input" id="li-${i}-unit_sell" type="number" value="${li.unit_sell||''}" onchange="updLI(${i},'unit_sell',+this.value)" placeholder="0.00" step="0.01"></td>
+    <td id="li-${i}-ext_sell" style="text-align:right;padding-right:8px;font-weight:600">${fmt$(li.ext_sell||0)}</td>
+    <td id="li-${i}-margin_pct" class="internal-col" style="text-align:center;font-weight:600;color:${(li.margin_pct||0)>=20?'var(--success)':'var(--danger)'}">${li.margin_pct?li.margin_pct.toFixed(1)+'%':'—'}</td>
+    <td><input class="li-input" id="li-${i}-lead_time" value="${esc(li.lead_time||'')}" onchange="updLI(${i},'lead_time',this.value)" placeholder="2-3 weeks"></td>
+    <td class="internal-col"><input class="li-input" id="li-${i}-internal_notes" value="${esc(li.internal_notes||'')}" onchange="updLI(${i},'internal_notes',this.value)" placeholder="Internal..."></td>
     <td><button class="btn btn-ghost btn-icon btn-sm" onclick="remLI(${i})" style="color:var(--danger)">✕</button></td>
   </tr>`).join('');
   calcTotals();
 }
 
-function addLineItem() { STATE.editLineItems.push({description:'',part_number:'',quantity:1,unit_cost:0,unit_sell:0,supplier:'',lead_time:'',internal_notes:'',ext_sell:0,margin_pct:0}); renderLineItems(); }
-function remLI(i) { STATE.editLineItems.splice(i,1); renderLineItems(); }
+function addLineItem() {
+  STATE.editLineItems.push({description:'',part_number:'',uom:'EA',quantity:1,unit_cost:0,unit_sell:0,supplier:'',lead_time:'',internal_notes:'',ext_sell:0,margin_pct:0});
+  renderLineItems();
+  // Focus the description field of the new row
+  const newIdx = STATE.editLineItems.length - 1;
+  setTimeout(() => {
+    const el = document.getElementById(`li-${newIdx}-description`);
+    if (el) el.focus();
+  }, 50);
+}
+
+function remLI(i) {
+  STATE.editLineItems.splice(i,1);
+  renderLineItems();
+}
+
 function updLI(i, f, v) {
   STATE.editLineItems[i][f] = v;
   const li = STATE.editLineItems[i];
   li.ext_sell = (li.unit_sell||0)*(li.quantity||1);
   const ec = (li.unit_cost||0)*(li.quantity||1);
   li.margin_pct = li.ext_sell>0 ? ((li.ext_sell-ec)/li.ext_sell*100) : 0;
-  renderLineItems();
+  // Only update the calculated cells, not the whole table
+  const extEl = document.getElementById(`li-${i}-ext_sell`);
+  const marEl = document.getElementById(`li-${i}-margin_pct`);
+  if (extEl) extEl.textContent = fmt$(li.ext_sell||0);
+  if (marEl) {
+    marEl.textContent = li.margin_pct ? li.margin_pct.toFixed(1)+'%' : '—';
+    marEl.style.color = (li.margin_pct||0)>=20 ? 'var(--success)' : 'var(--danger)';
+  }
+  calcTotals();
 }
 function calcTotals() {
   const items = STATE.editLineItems||[];
@@ -1487,8 +1511,8 @@ function exportPDF(id) {
   </div>
   <div class="section-title">Line Items</div>
   <table>
-    <thead><tr><th>#</th><th>Description</th><th>Part Number</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Extended</th><th>Lead Time</th></tr></thead>
-    <tbody>${(q.line_items||[]).map((li,i)=>`<tr><td>${i+1}</td><td>${li.description||''}</td><td style="font-family:monospace;font-size:12px">${li.part_number||'—'}</td><td class="r">${li.quantity||1}</td><td class="r">$${(li.unit_sell||0).toFixed(2)}</td><td class="r"><strong>$${(li.ext_sell||0).toFixed(2)}</strong></td><td>${li.lead_time||'—'}</td></tr>`).join('')}</tbody>
+    <thead><tr><th>#</th><th>Description</th><th>UOM</th><th>Part Number</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Extended</th><th>Lead Time</th></tr></thead>
+    <tbody>${(q.line_items||[]).map((li,i)=>`<tr><td>${i+1}</td><td>${li.description||''}</td><td>${li.uom||'—'}</td><td style="font-family:monospace;font-size:12px">${li.part_number||'—'}</td><td class="r">${li.quantity||1}</td><td class="r">$${(li.unit_sell||0).toFixed(2)}</td><td class="r"><strong>$${(li.ext_sell||0).toFixed(2)}</strong></td><td>${li.lead_time||'—'}</td></tr>`).join('')}</tbody>
   </table>
   <div style="display:flex;justify-content:flex-end;margin-top:16px">
     <div style="min-width:220px">
@@ -1508,8 +1532,8 @@ function exportQuoteXLSX(id) {
     ['Company', q.company_name], ['Contact', q.contact_name],
     ['Prepared By', q.owner_name], ['Date', fmtD(q.created_at)],
     ['Expires', fmtD(q.expiration_date)], ['Status', q.status], [],
-    ['#','Description','Part Number','Qty','Unit Price','Extended','Lead Time'],
-    ...(q.line_items||[]).map((li,i)=>[i+1,li.description,li.part_number,li.quantity,li.unit_sell||0,li.ext_sell||0,li.lead_time]),
+    ['#','Description','UOM','Part Number','Qty','Unit Price','Extended','Lead Time'],
+    ...(q.line_items||[]).map((li,i)=>[i+1,li.description,li.uom||'',li.part_number,li.quantity,li.unit_sell||0,li.ext_sell||0,li.lead_time]),
     [],[,'','','','Total',q.total_sell||0,'']
   ];
   const ws=XLSX.utils.aoa_to_sheet(rows), wb=XLSX.utils.book_new();
