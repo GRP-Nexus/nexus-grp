@@ -362,6 +362,8 @@ textarea.form-control{resize:vertical;min-height:80px;}
           <div class="tab active" onclick="switchAdminTab('overview')">Overview</div>
           <div class="tab" onclick="switchAdminTab('users')">Users</div>
           <div class="tab" onclick="switchAdminTab('all-quotes')">All Quotes</div>
+          <div class="tab" onclick="switchAdminTab('manage-companies')">Companies</div>
+          <div class="tab" onclick="switchAdminTab('manage-contacts')">Contacts</div>
         </div>
         <div id="admin-tab-overview">
           <div class="stats-grid" id="admin-stats"></div>
@@ -387,6 +389,32 @@ textarea.form-control{resize:vertical;min-height:80px;}
               <button class="btn btn-outline btn-sm" onclick="exportAllQuotesExcel()">Export Excel</button>
             </div>
             <div class="table-wrap"><table><thead><tr><th>Quote #</th><th>Company</th><th>Contact</th><th>Rep</th><th>Status</th><th class="text-right">Value</th><th class="text-right">Margin</th><th>Created</th><th></th></tr></thead><tbody id="admin-quotes-tbody"></tbody></table></div>
+          </div>
+        </div>
+
+        <div id="admin-tab-manage-companies" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div class="search-bar"><span class="search-icon">🔍</span><input type="text" placeholder="Search companies..." id="admin-company-search" oninput="renderAdminCompanies()"></div>
+              <div style="font-size:12px;color:var(--warning);font-weight:600">⚠ Admin only — deleting a company also removes its contacts and activity log</div>
+            </div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Company Name</th><th>Type</th><th>Contacts</th><th>Quotes</th><th>Created</th><th></th></tr></thead>
+              <tbody id="admin-companies-tbody"></tbody></table>
+            </div>
+          </div>
+        </div>
+
+        <div id="admin-tab-manage-contacts" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div class="search-bar"><span class="search-icon">🔍</span><input type="text" placeholder="Search contacts..." id="admin-contact-search" oninput="renderAdminContacts()"></div>
+              <div style="font-size:12px;color:var(--warning);font-weight:600">⚠ Admin only — deleting removes the contact and their activity log</div>
+            </div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Type</th><th>Created</th><th></th></tr></thead>
+              <tbody id="admin-contacts-tbody"></tbody></table>
+            </div>
           </div>
         </div>
       </div>
@@ -1546,11 +1574,20 @@ function renderAdminQuotes() {
 }
 
 function switchAdminTab(tab) {
-  document.querySelectorAll('#page-admin .tab').forEach((t,i)=>{ t.classList.toggle('active',['overview','users','all-quotes'][i]===tab); });
-  document.getElementById('admin-tab-overview').style.display   = tab==='overview'   ?'block':'none';
-  document.getElementById('admin-tab-users').style.display      = tab==='users'      ?'block':'none';
-  document.getElementById('admin-tab-all-quotes').style.display = tab==='all-quotes' ?'block':'none';
-  if(tab==='all-quotes'){ const s=document.getElementById('admin-rep-filter2'); while(s.options.length>1) s.remove(1); STATE.data.users.forEach(u=>{const o=document.createElement('option');o.value=u.id;o.textContent=u.full_name;s.appendChild(o);}); renderAdminQuotes(); }
+  const allTabs = ['overview','users','all-quotes','manage-companies','manage-contacts'];
+  document.querySelectorAll('#page-admin .tab').forEach((t,i)=>{ t.classList.toggle('active', allTabs[i]===tab); });
+  allTabs.forEach(t => {
+    const el = document.getElementById('admin-tab-'+t);
+    if (el) el.style.display = t===tab ? 'block' : 'none';
+  });
+  if (tab==='all-quotes') {
+    const s=document.getElementById('admin-rep-filter2');
+    while(s.options.length>1) s.remove(1);
+    STATE.data.users.forEach(u=>{const o=document.createElement('option');o.value=u.id;o.textContent=u.full_name;s.appendChild(o);});
+    renderAdminQuotes();
+  }
+  if (tab==='manage-companies') renderAdminCompanies();
+  if (tab==='manage-contacts') renderAdminContacts();
 }
 
 function openUserModal(editId=null) {
@@ -1570,6 +1607,79 @@ async function saveUser() {
   else STATE.data.users.push({id:uid(),...data,created_at:new Date().toISOString()});
   await save('users'); closeModal('modal-user');
   showToast(editId?'User updated':'User added','success'); renderAdminUsers(); populateFilters();
+}
+
+// ─── ADMIN COMPANY/CONTACT MANAGEMENT ───
+function renderAdminCompanies() {
+  const search = (document.getElementById('admin-company-search')?.value||'').toLowerCase();
+  let companies = STATE.data.companies;
+  if (search) companies = companies.filter(c=>c.name.toLowerCase().includes(search));
+  companies = [...companies].sort((a,b)=>a.name.localeCompare(b.name));
+  const tbody = document.getElementById('admin-companies-tbody');
+  if (!tbody) return;
+  if (!companies.length) {
+    tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state" style="padding:30px"><div class="empty-title">No companies found</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = companies.map(c=>{
+    const contactCount = STATE.data.contacts.filter(x=>x.company_id===c.id).length;
+    const quoteCount   = STATE.data.quotes.filter(x=>x.company_id===c.id).length;
+    return `<tr>
+      <td class="fw-600">${c.name}</td>
+      <td>${tBadge(c.type)}</td>
+      <td>${contactCount}</td>
+      <td>${quoteCount}</td>
+      <td class="td-muted">${fmtD(c.created_at)}</td>
+      <td>
+        <button class="btn btn-danger btn-sm" onclick="adminDeleteCompany('${c.id}','${esc(c.name)}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAdminContacts() {
+  const search = (document.getElementById('admin-contact-search')?.value||'').toLowerCase();
+  let contacts = STATE.data.contacts;
+  if (search) contacts = contacts.filter(c=>`${c.first_name} ${c.last_name}`.toLowerCase().includes(search)||(c.company_name||'').toLowerCase().includes(search));
+  contacts = [...contacts].sort((a,b)=>`${a.last_name}${a.first_name}`.localeCompare(`${b.last_name}${b.first_name}`));
+  const tbody = document.getElementById('admin-contacts-tbody');
+  if (!tbody) return;
+  if (!contacts.length) {
+    tbody.innerHTML=`<tr><td colspan="6"><div class="empty-state" style="padding:30px"><div class="empty-title">No contacts found</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = contacts.map(c=>`<tr>
+    <td class="fw-600">${c.first_name} ${c.last_name}</td>
+    <td>${c.company_name||'—'}</td>
+    <td>${c.email||'—'}</td>
+    <td>${tBadge(c.type)}</td>
+    <td class="td-muted">${fmtD(c.created_at)}</td>
+    <td>
+      <button class="btn btn-danger btn-sm" onclick="adminDeleteContact('${c.id}','${esc(c.first_name+' '+c.last_name)}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function adminDeleteCompany(id, name) {
+  if (!confirm(`Delete company "${name}"?\n\nThis will also delete:\n• All contacts at this company\n• All activity log entries for this company\n\nQuotes will be kept but unlinked.\n\nThis cannot be undone.`)) return;
+  // Remove company
+  STATE.data.companies = STATE.data.companies.filter(c=>c.id!==id);
+  // Remove all contacts at this company
+  STATE.data.contacts = STATE.data.contacts.filter(c=>c.company_id!==id);
+  // Remove activity log entries
+  STATE.data.activity_log = STATE.data.activity_log.filter(a=>a.company_id!==id);
+  await Promise.all([save('companies'), save('contacts'), save('activity_log')]);
+  showToast(`"${name}" deleted`,'success');
+  renderAdminCompanies();
+}
+
+async function adminDeleteContact(id, name) {
+  if (!confirm(`Delete contact "${name}"?\n\nThis will also delete their activity log entries.\n\nThis cannot be undone.`)) return;
+  STATE.data.contacts = STATE.data.contacts.filter(c=>c.id!==id);
+  STATE.data.activity_log = STATE.data.activity_log.filter(a=>a.contact_id!==id);
+  await Promise.all([save('contacts'), save('activity_log')]);
+  showToast(`"${name}" deleted`,'success');
+  renderAdminContacts();
 }
 </script>
 <script>
