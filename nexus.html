@@ -590,6 +590,7 @@ let STATE = {
 // AUTH
 // ═══════════════════════════════════════
 let msalInstance = null;
+let msalReady = false;
 
 async function initMSAL() {
   await loadScript('https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/3.14.0/msal-browser.min.js');
@@ -616,6 +617,7 @@ async function initMSAL() {
   try {
     msalInstance = new msal.PublicClientApplication(msalConfig);
     await msalInstance.initialize();
+    msalReady = true;
   } catch(e) {
     console.error('MSAL init error:', e);
     showLogin();
@@ -664,24 +666,24 @@ function loadScript(src) {
 }
 
 async function signIn() {
+  // Wait up to 5 seconds for MSAL to be ready
+  let waited = 0;
+  while (!msalReady && waited < 5000) {
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
+  if (!msalReady || !msalInstance) {
+    showToast('Authentication not ready yet. Please wait a moment and try again.', 'error');
+    return;
+  }
   try {
     await msalInstance.loginRedirect({
       scopes: CONFIG.scopes,
       prompt: 'select_account'
     });
   } catch(e) {
-    console.error('Login error:', e);
-    // Try popup as fallback
-    try {
-      const r = await msalInstance.loginPopup({ scopes: CONFIG.scopes });
-      if (r && r.accessToken) {
-        STATE.accessToken = r.accessToken;
-        STATE.user = r.account;
-        await bootApp();
-      }
-    } catch(e2) {
-      showToast('Sign in failed: ' + e2.message, 'error');
-    }
+    console.error('Login redirect error:', e);
+    showToast('Sign in failed: ' + e.message + ' — try refreshing the page.', 'error');
   }
 }
 function signOut() { msalInstance.logoutRedirect(); }
